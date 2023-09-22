@@ -6,7 +6,10 @@
 
 #DISABLE_COCKPIT_SOCKET=yes
 
-if [ ! -f /etc/cockpit_service ]; then
+if [ ! -f /etc/cockpit_service ]; 
+    case "${BASE_DISTRO}" in
+  redhat|rocky|centos)
+
     apt-get install -y cockpit
     touch /etc/cockpit_service
     if [ "$DISABLE_COCKPIT_SOCKET" == "yes" ]; then

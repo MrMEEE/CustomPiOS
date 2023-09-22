@@ -17,22 +17,38 @@ if [ -z "${DEBIAN_FRONTEND}" ]; then
     export DEBIAN_FRONTEND=noninteractive
 fi
 
-## Force Update
-apt update --allow-releaseinfo-change
+case "${BASE_DISTRO}" in
+    redhat|rocky|centos)
+      ### Pre Update Section
+      if [ "${PKGUPGRADE_DISTUPGRADE}" = "y" ]; then
+        echo_green "Performing 'dnf update' ... "
+        dnf -y update
+      else
+        echo_green "Skipping Dist Upgrade ['dnf update']."
+      fi
+      
+      ;;
 
-### Pre Update Section
-if [ "${PKGUPGRADE_DISTUPGRADE}" = "y" ]; then
-  echo_green "Performing 'apt ${PKGUPGRADE_DISTUPGRADE_METHOD}' ... "
-  apt ${PKGUPGRADE_DISTUPGRADE_METHOD} -y
-else
-  echo_green "Skipping Dist Upgrade ['apt ${PKGUPGRADE_DISTUPGRADE_METHOD}']."
-fi
+    *)
+      ## Force Update
+      apt update --allow-releaseinfo-change
 
-### Pre Installer Section
-# Make sure Cache is fresh
-apt_update_skip
-if [ "${PKGUPGRADE_USE_PREINSTALLER}" = "y" ]; then
-  apt-get install --yes --no-install-recommends "${PKGUPGRADE_PRE_INSTALL_PKGS}"
-else
-  echo_red "PreInstall Mechanism not configured. [SKIPPED]"
-fi
+      ### Pre Update Section
+      if [ "${PKGUPGRADE_DISTUPGRADE}" = "y" ]; then
+        echo_green "Performing 'apt ${PKGUPGRADE_DISTUPGRADE_METHOD}' ... "
+        apt ${PKGUPGRADE_DISTUPGRADE_METHOD} -y
+      else
+        echo_green "Skipping Dist Upgrade ['apt ${PKGUPGRADE_DISTUPGRADE_METHOD}']."
+      fi
+
+      ### Pre Installer Section
+      # Make sure Cache is fresh
+      apt_update_skip
+      if [ "${PKGUPGRADE_USE_PREINSTALLER}" = "y" ]; then
+        apt install --yes --no-install-recommends "${PKGUPGRADE_PRE_INSTALL_PKGS}"
+      else
+        echo_red "PreInstall Mechanism not configured. [SKIPPED]"
+      fi
+      ;;
+
+esac

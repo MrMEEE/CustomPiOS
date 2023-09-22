@@ -1,4 +1,4 @@
-FROM debian:bullseye-backports
+FROM debian:buster
 
 MAINTAINER Guy Sheffer <guysoft at gmail dot com>
 
@@ -12,11 +12,8 @@ RUN set -x \
         python3 \
         binfmt-support \
         qemu \
-        qemu-user-static/bullseye-backports \
+        qemu-user-static \
         sudo \
-        file \
-        fdisk \
-        jq \
         zip \
         xz-utils \
         lsof \

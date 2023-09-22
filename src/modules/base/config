@@ -16,28 +16,49 @@ BASE_VERSION=1.5.0
 [ -n "$BASE_DISTRO" ] || BASE_DISTRO=raspbian
 
 # Note: Set BASE_ZIP_IMG relative to the distro/src/workspace directory to pass a custom named file or an already extracted '.img'-file.
-if [ "${BASE_DISTRO}" == "ubuntu" ]; then
-    # Default image ubuntu
-    [ -n "$BASE_ZIP_IMG" ] || BASE_ZIP_IMG=`ls -t $BASE_IMAGE_PATH/ubuntu-*.xz | head -n 1`
-    # Default user ubuntu
-    [ -n "$BASE_USER" ] || BASE_USER=ubuntu
+
+case "${BASE_DISTRO}" in
+    ubuntu)
+        # Default image ubuntu
+        [ -n "$BASE_ZIP_IMG" ] || BASE_ZIP_IMG=`ls -t $BASE_IMAGE_PATH/ubuntu-*.xz | head -n 1`
+        # Default user ubuntu
+        [ -n "$BASE_USER" ] || BASE_USER=ubuntu
     
-    # Add base user if does not exist
-    [ -n "$BASE_ADD_USER" ] || BASE_ADD_USER=yes
-    # When adding a base user which password to use
-    [ -n "$BASE_USER_PASSWORD" ] || BASE_USER_PASSWORD=ubuntu
-else
-    # Default image raspbian
-    if [ "${BASE_DISTRO}" == "raspios64" ]; then
-        [ -n "$BASE_ZIP_IMG" ] || BASE_ZIP_IMG=`ls -t $BASE_IMAGE_PATH/*-{raspbian,raspios}-*-arm64-*.{zip,7z,xz} | head -n 1`
-    else
-        [ -n "$BASE_ZIP_IMG" ] || BASE_ZIP_IMG=`ls -t $BASE_IMAGE_PATH/*-{raspbian,raspios}*.{zip,7z,xz} | head -n 1`
-    fi
-    # Default user raspbian
-    [ -n "$BASE_USER" ] || BASE_USER=pi
-    [ -n "$BASE_ADD_USER" ] || BASE_ADD_USER=yes
-    [ -n "$BASE_USER_PASSWORD" ] || BASE_USER_PASSWORD=raspberry
-fi
+        # Add base user if does not exist
+        [ -n "$BASE_ADD_USER" ] || BASE_ADD_USER=yes
+        # When adding a base user which password to use
+        [ -n "$BASE_USER_PASSWORD" ] || BASE_USER_PASSWORD=ubuntu
+        ;;
+    
+    rocky)
+        # Default image rocky
+        [ -n "$BASE_ZIP_IMG" ] || BASE_ZIP_IMG=`ls -t $BASE_IMAGE_PATH/RockyLinuxRpi*.xz | head -n 1`
+        # Default user rocky
+        [ -n "$BASE_USER" ] || BASE_USER=rocky
+    
+        # Add base user if does not exist
+        [ -n "$BASE_ADD_USER" ] || BASE_ADD_USER=yes
+        # When adding a base user which password to use
+        [ -n "$BASE_USER_PASSWORD" ] || BASE_USER_PASSWORD=rocky
+        # Default root partion is 3 on Rocky (2 is swap)
+        [ -n "$BASE_ROOT_PARTITION" ] || BASE_ROOT_PARTITION=3
+
+        ;;
+
+    *)
+        # Default image raspbian
+        if [ "${BASE_DISTRO}" == "raspios64" ]; then
+           [ -n "$BASE_ZIP_IMG" ] || BASE_ZIP_IMG=`ls -t $BASE_IMAGE_PATH/*-{raspbian,raspios}-*-arm64-*.{zip,7z,xz} | head -n 1`
+        else
+           [ -n "$BASE_ZIP_IMG" ] || BASE_ZIP_IMG=`ls -t $BASE_IMAGE_PATH/*-{raspbian,raspios}*.{zip,7z,xz} | head -n 1`
+        fi
+        # Default user raspbian
+        [ -n "$BASE_USER" ] || BASE_USER=pi
+        [ -n "$BASE_ADD_USER" ] || BASE_ADD_USER=yes
+        [ -n "$BASE_USER_PASSWORD" ] || BASE_USER_PASSWORD=raspberry
+        ;;
+
+esac
 
 # Release compression
 [ -n "$BASE_RELEASE_COMPRESS" ] || BASE_RELEASE_COMPRESS=yes
@@ -65,13 +86,17 @@ fi
 # provided size in MB
 [ -n "$BASE_IMAGE_RESIZEROOT" ] || BASE_IMAGE_RESIZEROOT=200
 
+# a local directory on the build server to bind mount under /var/cache/dnf
+[ -n "$BASE_DNF_CACHE" ] || BASE_DNF_CACHE=$BASE_WORKSPACE/dnfcache
+
+# a host:port combo for a dnf proxy 
+[ -n "$BASE_DNF_PROXY" ] || BASE_DNF_PROXY=
+
 # a local directory on the build server to bind mount under /var/cache/apt
 [ -n "$BASE_APT_CACHE" ] || BASE_APT_CACHE=$BASE_WORKSPACE/aptcache
 
 # a host:port combo for a apt-proxy (such as apt-cacher-ng) to use
 [ -n "$BASE_APT_PROXY" ] || BASE_APT_PROXY=
-
-[ -n "$BASE_APT_MIRROR" ] || BASE_APT_MIRROR=
 
 # an alternative pypi index url to use, e.g. a proxy such as devpi
 [ -n "$BASE_PYPI_INDEX" ] || BASE_PYPI_INDEX=

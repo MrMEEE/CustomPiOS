@@ -11,34 +11,37 @@ export LC_ALL=C
 
 source /common.sh
 install_cleanup_trap
-if [ -n "${BASE_APT_MIRROR}" ]; then
-   echo "${BASE_APT_MIRROR}" | cat - /etc/apt/sources.list > /tmp/filename.tmp
-   mv /tmp/filename.tmp /etc/apt/sources.list
-fi
 
-if [ "${BASE_DISTRO}" == "ubuntu" ]; then
-  unpack /filesystem/ubuntu / root
+case "${BASE_DISTRO}" in
+  redhat|rocky|centos)
+    mv /etc/resolv.conf /etc/resolv.conf.orig || true
+    echo "nameserver 8.8.8.8" > /etc/resolv.conf
+    echo "nameserver 8.8.4.4" >> /etc/resolv.conf
+    echo "nameserver 1.1.1.1" >> /etc/resolv.conf
+    ;;
+  ubuntu)
+    unpack /filesystem/ubuntu / root
 
-  mv /etc/resolv.conf /etc/resolv.conf.orig || true
-  echo "nameserver 8.8.8.8" > /etc/resolv.conf
-  echo "nameserver 8.8.4.4" >> /etc/resolv.conf
-  echo "nameserver 1.1.1.1" >> /etc/resolv.conf
-  
-  apt-get update --allow-releaseinfo-change
-  apt-get install -y net-tools wireless-tools dhcpcd5
-  if [ $( is_in_apt policykit-1 ) -eq 1 ]; then
-    apt-get -y install policykit-1
-  fi
-  
-  # prevent any installed services from automatically starting
-  echo exit 101 > /usr/sbin/policy-rc.d
-  chmod +x /usr/sbin/policy-rc.d
-  systemctl enable dhcpcd.service
-  
-  #Undo prevent any installed services from automatically starting
-  rm -r /usr/sbin/policy-rc.d || true
-  
-fi
+    mv /etc/resolv.conf /etc/resolv.conf.orig || true
+    echo "nameserver 8.8.8.8" > /etc/resolv.conf
+    echo "nameserver 8.8.4.4" >> /etc/resolv.conf
+    echo "nameserver 1.1.1.1" >> /etc/resolv.conf
+    
+    apt-get update --allow-releaseinfo-change
+    apt-get install -y net-tools wireless-tools dhcpcd5
+    if [ $( is_in_apt policykit-1 ) -eq 1 ]; then
+      apt-get -y install policykit-1
+    fi
+    
+    # prevent any installed services from automatically starting
+    echo exit 101 > /usr/sbin/policy-rc.d
+    chmod +x /usr/sbin/policy-rc.d
+    systemctl enable dhcpcd.service
+-    
+    #Undo prevent any installed services from automatically starting
+    rm -r /usr/sbin/policy-rc.d || true
+    ;;
+esac
 
 #Helper Function for create_userconf
 function get_os_version {
@@ -85,9 +88,18 @@ if [ "${BASE_ADD_USER}" == "yes" ]; then
             echo "Base user exists, not adding"
         else
             echo "Adding base user ${BASE_USER}"
-            password=$(perl -e 'printf("%s\n", crypt($ARGV[0], "password"))' "${BASE_USER_PASSWORD}")
-            useradd -m -p "${password}" -s /bin/bash "${BASE_USER}"
-            usermod -a -G sudo "${BASE_USER}"
+            case "${BASE_DISTRO}" in
+              redhat|rocky|centos)
+                useradd -m -s /bin/bash "${BASE_USER}"
+                usermod -a -G wheel "${BASE_USER}"
+                echo "${BASE_USER_PASSWORD}" | passwd --stdin "${BASE_USER}"
+                ;;
+              *)
+                password=$(perl -e 'printf("%s\n", crypt($ARGV[0], "password"))' "${BASE_USER_PASSWORD}")
+                useradd -m -p "${password}" -s /bin/bash "${BASE_USER}"
+                usermod -a -G sudo "${BASE_USER}"
+                ;;
+            esac
         fi
     fi
 fi

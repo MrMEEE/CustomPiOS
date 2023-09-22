@@ -81,6 +81,10 @@ ADMIN_TOOLKIT_HOSTNAME_CHANGE_SCRIPT=no
 [ -n "$ADMIN_TOOLKIT_INSTALL_LIST" ] || ADMIN_TOOLKIT_INSTALL_LIST=no
 
 
+######### FIREWALLD #######################################
+#  Set to yes if you want to enable FirewallD on Rocky, CentOS and Redhat
+[ -n "$ADMIN_TOOLKIT_FIREWALLD_INSTALL" ] || ADMIN_TOOLKIT_FIREWALLD_INSTALL=no
+
 ######### UFW #############################################
 #  Set to yes if you want the ufw firewall installed. Unless you
 #  specify other ports below only ssh port 22 will be open, all

@@ -18,3 +18,4 @@ if [ "$COCKPIT_INSTALL_DISABLE_COCKPIT_SOCKET" == 'yes' ]
 then
     sed -i /home/pi/scripts/install_cockpit -e "s/^#DISABLE_COCKPIT_SOCKET=yes/DISABLE_COCKPIT_SOCKET=yes/"
 fi
+systemctl enable cockpit_installer.service

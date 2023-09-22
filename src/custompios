@@ -12,7 +12,7 @@ source ${CUSTOM_PI_OS_PATH}/common.sh
 function execute_chroot_script() {
 
   # In docker, these extra commands are required to enable this black-magic
-  if [ -f /.dockerenv ] && [ "$(uname -m)" != "armv7l" ] && [ "$(uname -m)" != "aarch64" ] ; then
+  if [ -f /.dockerenv ] && [ "$(arch)" != "armv7l" ] && [ "$(arch)" != "aarch64" ] ; then
     if [ "$BASE_ARCH" == "armv7l" ]; then
       update-binfmts --enable qemu-arm
     elif [ "$BASE_ARCH" == "aarch64" ] || [ "$BASE_ARCH" == "arm64" ]; then
@@ -27,19 +27,11 @@ function execute_chroot_script() {
 
   #black magic of qemu-arm-static
   # cp `which qemu-arm-static` usr/bin
-  if [ "$(uname -m)" != "armv7l" ] && [ "$(uname -m)" != "aarch64" ] ; then
+  if [ "$(arch)" != "armv7l" ] && [ "$(arch)" != "aarch64" ] ; then
     if [ "$BASE_ARCH" == "armv7l" ]; then
-      if (grep -q gentoo /etc/os-release);then
-        ROOT="`realpath .`" emerge --usepkgonly --oneshot --nodeps qemu
-      else
-        cp `which qemu-arm-static` usr/bin/qemu-arm-static
-      fi
+      cp `which qemu-arm-static` usr/bin/qemu-arm-static
     elif [ "$BASE_ARCH" == "aarch64" ] || [ "$BASE_ARCH" == "arm64" ]; then
-      if (grep -q gentoo /etc/os-release);then
-        ROOT="`realpath .`" emerge --usepkgonly --oneshot --nodeps qemu
-      else
-        cp `which qemu-aarch64-static` usr/bin/qemu-aarch64-static
-      fi
+      cp `which qemu-aarch64-static` usr/bin/qemu-aarch64-static
     fi
   fi
   
@@ -48,25 +40,14 @@ function execute_chroot_script() {
   cp "${CUSTOM_PI_OS_PATH}"/common.sh common.sh
   chmod 755 common.sh
   
-  if [ "$(uname -m)" != "armv7l" ] && [ "$(uname -m)" != "aarch64" ] && [ "$(uname -m)" != "arm64" ] ; then
+  if [ "$(arch)" != "armv7l" ] && [ "$(arch)" != "aarch64" ] && [ "$(arch)" != "arm64" ] ; then
     if [ "$BASE_ARCH" == "armv7l" ]; then
       echo "Building on non-ARM device a armv7l system, using qemu-arm-static"
-      if (grep -q gentoo /etc/os-release);then
-        chroot . usr/bin/qemu-arm /bin/bash /chroot_script
-      else
-        chroot . usr/bin/qemu-arm-static /bin/bash /chroot_script
-      fi
+      chroot . usr/bin/qemu-arm-static /bin/bash /chroot_script
     elif [ "$BASE_ARCH" == "aarch64" ] || [ "$BASE_ARCH" == "arm64" ]; then
       echo "Building on non-ARM device a aarch64/arm64 system, using qemu-aarch64-static"
-      if (grep -q gentoo /etc/os-release);then
-        chroot . usr/bin/qemu-aarch64 /bin/bash /chroot_script
-      else
-        chroot . usr/bin/qemu-aarch64-static /bin/bash /chroot_script
-      fi
+      chroot . usr/bin/qemu-aarch64-static /bin/bash /chroot_script
     fi
-  elif [ "$BASE_ARCH" == "armv7l" ] && [ "$(uname -m)" != "armv7l" ]; then
-    echo "Building on aarch64/arm64 device a armv7l system, using qemu-arm-static"
-    chroot . usr/bin/qemu-arm-static /bin/bash /chroot_script
   else
     echo "Building on ARM device a armv7l/aarch64/arm64 system, not using qemu"
     chroot . /bin/bash /chroot_script
@@ -128,16 +109,28 @@ pushd $BASE_WORKSPACE
   if [ -n "$BASE_IMAGE_ENLARGEROOT" ]
   then
     # make our image a bit larger so we don't run into size problems...
-    enlarge_ext $BASE_IMG_PATH $BASE_ROOT_PARTITION $BASE_IMAGE_ENLARGEROOT
+    enlarge_fs $BASE_IMG_PATH $BASE_ROOT_PARTITION $BASE_IMAGE_ENLARGEROOT
   fi
 
   # mount root and boot partition
-  mount_image "${BASE_IMG_PATH}" "${BASE_ROOT_PARTITION}" "${BASE_MOUNT_PATH}" "${BASE_BOOT_MOUNT_PATH}" "${BASE_BOOT_PARTITION}"
-  if [ -n "$BASE_APT_CACHE" ] && [ "$BASE_APT_CACHE" != "no" ]
-  then
-    mkdir -p "$BASE_APT_CACHE"
-    mount --bind "$BASE_APT_CACHE" $BASE_MOUNT_PATH/var/cache/apt
-  fi
+  mount_image "${BASE_IMG_PATH}" "${BASE_ROOT_PARTITION}" "${BASE_MOUNT_PATH}" "${BASE_BOOT_MOUNT_PATH}"
+  case "${BASE_DISTRO}" in
+    redhat|rocky|centos)
+      if [ -n "$BASE_DNF_CACHE" ] && [ "$BASE_DNF_CACHE" != "no" ]
+      then
+        mkdir -p "$BASE_DNF_CACHE"
+        mount --bind "$BASE_DNF_CACHE" $BASE_MOUNT_PATH/var/cache/dnf
+      fi
+      ;;
+    
+    *)
+      if [ -n "$BASE_APT_CACHE" ] && [ "$BASE_APT_CACHE" != "no" ]
+      then
+        mkdir -p "$BASE_APT_CACHE"
+        mount --bind "$BASE_APT_CACHE" $BASE_MOUNT_PATH/var/cache/apt
+      fi
+      ;;
+  esac
 
   #Edit pi filesystem
   pushd $BASE_MOUNT_PATH

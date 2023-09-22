@@ -171,23 +171,18 @@ function mount_image() {
   mount_path=$3
   
   boot_mount_path=boot
-
   if [ "$#" -gt 3 ]
   then
     boot_mount_path=$4
   fi
-
-  if [ "$#" -gt 4 ] && [ "$5" != "" ]
-  then
-    boot_partition=$5
-  else
-    boot_partition=1
-  fi
+  
+  echo $2
 
   # dump the partition table, locate boot partition and root partition
-  fdisk_output=$(sfdisk --json "${image_path}" )
-  boot_offset=$(($(jq ".partitiontable.partitions[] | select(.node == \"$image_path$boot_partition\").start" <<< ${fdisk_output}) * 512))
-  root_offset=$(($(jq ".partitiontable.partitions[] | select(.node == \"$image_path$root_partition\").start" <<< ${fdisk_output}) * 512))
+  boot_partition=1
+  fdisk_output=$(sfdisk -d $image_path)
+  boot_offset=$(($(echo "$fdisk_output" | grep "$image_path$boot_partition" | awk '{print $4-0}') * 512))
+  root_offset=$(($(echo "$fdisk_output" | grep "$image_path$root_partition" | awk '{print $4-0}') * 512))
 
   echo "Mounting image $image_path on $mount_path, offset for boot partition is $boot_offset, offset for root partition is $root_offset"
 
@@ -203,7 +198,6 @@ function mount_image() {
 	  sudo mount -o loop,offset=$boot_offset,sizelimit=$( expr $root_offset - $boot_offset ) "${image_path}" "${mount_path}"/"${boot_mount_path}"
   fi
   sudo mkdir -p $mount_path/dev/pts
-  sudo mkdir -p $mount_path/proc
   sudo mount -o bind /dev $mount_path/dev
   sudo mount -o bind /dev/pts $mount_path/dev/pts
   sudo mount -o bind /proc $mount_path/proc
@@ -269,8 +263,8 @@ function install_cleanup_trap() {
   trap 'cleanup' SIGINT SIGTERM
  }
 
-function enlarge_ext() {
-  # call like this: enlarge_ext /path/to/image partition size
+function enlarge_fs() {
+  # call like this: enlarge_fs /path/to/image partition size
   #
   # will enlarge partition number <partition> on /path/to/image by <size> MB
   image=$1
@@ -278,7 +272,7 @@ function enlarge_ext() {
   size=$3
 
   echo "Adding $size MB to partition $partition of $image"
-  start=$(sfdisk --json "${image}" | jq ".partitiontable.partitions[] | select(.node ==  \"$image$partition\").start")
+  start=$(sfdisk -d $image | grep "$image$partition" | awk '{print $4-0}')
   offset=$(($start*512))
   dd if=/dev/zero bs=1M count=$size >> $image
   fdisk $image <<FDISK
@@ -297,46 +291,42 @@ FDISK
   test_for_image $image
   LODEV=$(losetup -f --show -o $offset $image)
   trap 'losetup -d $LODEV' EXIT
-  if ( file -Ls $LODEV | grep -qi ext ); then
-    e2fsck -fy $LODEV
-    resize2fs -p $LODEV
-  elif ( file -Ls $LODEV | grep -qi btrfs ); then
-    btrfs check --repair $LODEV
-    if ( mount | grep $LODEV ); then
-      TDIR=$(mount | grep $LODEV)
-      btrfs filesystem resize max "$TDIR"
-    else
-      # btrfs needs to be mounted in order to resize
-      TDIR=$(mktemp -d /tmp/CPiOS_XXXX)
-      # the following two lines should be pointless, but I had many iterations
-      # where the mount below fails, but adding these two lines (which were
-      # intended for debugging, really) seemed to add enough delay (??) to
-      # make it work
-      umount $LODEV || true
-      ls -l "$TDIR" > /dev/null
-      if mount $LODEV "$TDIR" ; then
-        btrfs filesystem resize max "$TDIR"
-        umount $LODEV
-      fi
-      rmdir "$TDIR"
-    fi
-  fi
+  
+  case "${BASE_DISTRO}" in
+    redhat|centos) # Rocky uses ext4
+      xfs_repair $LODEV
+      mount $LODEV /mnt
+      xfs_growfs /mnt
+      umount /mnt
+      ;;
+
+    *)
+      e2fsck -fy $LODEV
+      resize2fs -p $LODEV
+      ;;
+  esac
+
   losetup -d $LODEV
 
   trap - EXIT
   echo "Resized parition $partition of $image to +$size MB"
 }
 
-function shrink_ext() {
-  # call like this: shrink_ext /path/to/image partition size
+function shrink_fs() {
+  # call like this: shrink_fs /path/to/image partition size
   #
   # will shrink partition number <partition> on /path/to/image to <size> MB
   image=$1
   partition=$2
   size=$3
-  
+  case "${BASE_DISTRO}" in
+    redhat|centos) # Rocky uses ext4
+      echo "XFS Filesystem cannot be shrunken :("
+      exit 1
+      ;;
+  esac
   echo "Resizing file system to $size MB..."
-  start=$(sfdisk --json "${image}" | jq ".partitiontable.partitions[] | select(.node ==  \"$image$partition\").start")
+  start=$(sfdisk -d $image | grep "$image$partition" | awk '{print $4-0}')
   offset=$(($start*512))
 
   detach_all_loopback $image
@@ -393,10 +383,10 @@ function minimize_ext() {
   buffer=$3
 
   echo "Resizing partition $partition on $image to minimal size + $buffer MB"
-  fdisk_output=$(sfdisk --json "${image_path}" )
+  partitioninfo=$(sfdisk -d $image | grep "$image$partition")
   
-  start=$(jq ".partitiontable.partitions[] | select(.node == \"$image_path$partition\").start" <<< ${fdisk_output})
-  e2fsize_blocks=$(jq ".partitiontable.partitions[] | select(.node == \"$image_path$partition\").size" <<< ${fdisk_output})
+  start=$(echo $partitioninfo | awk '{print $4-0}')
+  e2fsize_blocks=$(echo $partitioninfo | awk '{print $6-0}')
   offset=$(($start*512))
 
   detach_all_loopback $image
@@ -427,10 +417,10 @@ function minimize_ext() {
   
   if [ $size_offset_mb -gt 0 ]; then
 	echo "Partition size is bigger then the desired size, shrinking"
-	shrink_ext $image $partition $(($e2ftarget_mb - 1)) # -1 to compensat rounding mistakes
+	shrink_fs $image $partition $(($e2ftarget_mb - 1)) # -1 to compensat rounding mistakes
   elif [ $size_offset_mb -lt 0 ]; then
     echo "Partition size is lower then the desired size, enlarging"
-	enlarge_ext $image $partition $((-$size_offset_mb + 1)) # +1 to compensat rounding mistakes
+	enlarge_fs $image $partition $((-$size_offset_mb + 1)) # +1 to compensat rounding mistakes
   fi
 }
 
@@ -485,7 +475,7 @@ function check_install_pkgs() {
   if [ "${#missing_pkgs[@]}" -ne 0 ]; then
       echo_red "${#missing_pkgs[@]} missing Packages..."
       echo_green "Installing ${missing_pkgs[@]}"
-      apt-get install --yes "${missing_pkgs[@]}"
+      apt install --yes "${missing_pkgs[@]}"
   else
       echo_green "No Dependencies missing... [SKIPPED]"
   fi

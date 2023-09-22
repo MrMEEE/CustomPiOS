@@ -95,44 +95,76 @@ fi
 # Begin general section
 if [ "$ADMIN_TOOLKIT_UPDATE_PACKAGES" == "yes" ]
 then
-    apt-get update --allow-releaseinfo-change && apt-get upgrade -y
+    case "${BASE_DISTRO}" in
+      redhat|rocky|centos)
+        dnf -y update
+        ;;
+      *)
+        apt-get update --allow-releaseinfo-change && apt-get upgrade -y
+        ;;
+    esac
 fi
 
 # Install packages if listed
 if [ "$ADMIN_TOOLKIT_INSTALL_LIST" != "no" ]
 then
-    apt-get install ${ADMIN_TOOLKIT_INSTALL_LIST} -y
+    case "${BASE_DISTRO}" in
+      redhat|rocky|centos)
+        dnf -y install ${ADMIN_TOOLKIT_INSTALL_LIST}
+        ;;
+      *)
+        apt-get install ${ADMIN_TOOLKIT_INSTALL_LIST} -y
+        ;;
+    esac
 fi
 
-# Install UFW Firewall if wanted
-if [ "$ADMIN_TOOLKIT_UFW_INSTALL" == "yes" ]
-then
-    apt-get install ufw -y
-    unpack /filesystem/root_init /
-    unpack /filesystem/home/pi /home/pi pi
-    chmod +x /home/pi/scripts/ufw_config
-    systemctl enable ufw_config.service
-
-    if [ "$ADMIN_TOOLKIT_UFW_PORTS_UDP" != "no" ]
+case "${BASE_DISTRO}" in
+  redhat|rocky|centos)
+    if [ "$ADMIN_TOOLKIT_FIREWALLD_INSTALL" == "yes" ]
     then
-        sed -i /home/pi/scripts/ufw_config -e "s/^UFW_PORTS_UDP=no/UFW_PORTS_UDP=${ADMIN_TOOLKIT_UFW_PORTS_UDP}/"
+        systemctl enable firewalld
     fi
-
-    if [ "$ADMIN_TOOLKIT_UFW_PORTS_TCP" != "no" ]
+    
+    ;;
+  *)
+    # Install UFW Firewall if wanted
+    if [ "$ADMIN_TOOLKIT_UFW_INSTALL" == "yes" ]
     then
-        sed -i /home/pi/scripts/ufw_config -e "s/^UFW_PORTS_TCP=no/UFW_PORTS_TCP=${ADMIN_TOOLKIT_UFW_PORTS_TCP}/"
-    fi
+        apt-get install ufw -y
+        unpack /filesystem/root_init /
+        unpack /filesystem/home/pi /home/pi pi
+        chmod +x /home/pi/scripts/ufw_config
+        systemctl enable ufw_config.service
 
-    if [ "$ADMIN_TOOLKIT_UFW_ENABLE_LOGGING" == "yes" ]
-    then
-        sed -i /home/pi/scripts/ufw_config -e "s/^UFW_ENABLE_LOGGING=no/UFW_ENABLE_LOGGING=yes/"
+        if [ "$ADMIN_TOOLKIT_UFW_PORTS_UDP" != "no" ]
+        then
+            sed -i /home/pi/scripts/ufw_config -e "s/^UFW_PORTS_UDP=no/UFW_PORTS_UDP=${ADMIN_TOOLKIT_UFW_PORTS_UDP}/"
+        fi
+
+        if [ "$ADMIN_TOOLKIT_UFW_PORTS_TCP" != "no" ]
+        then
+            sed -i /home/pi/scripts/ufw_config -e "s/^UFW_PORTS_TCP=no/UFW_PORTS_TCP=${ADMIN_TOOLKIT_UFW_PORTS_TCP}/"
+        fi
+
+        if [ "$ADMIN_TOOLKIT_UFW_ENABLE_LOGGING" == "yes" ]
+        then
+            sed -i /home/pi/scripts/ufw_config -e "s/^UFW_ENABLE_LOGGING=no/UFW_ENABLE_LOGGING=yes/"
+        fi
     fi
-fi
+    ;;
+esac
 
 # Remove Network Manager(fix for wifi random mac address)
 if [ "$ADMIN_TOOLKIT_REMOVE_NETWORK_MANAGER" == "yes" ]
 then
-    sudo apt-get remove network-manager -y
+    case "${BASE_DISTRO}" in
+      redhat|rocky|centos)
+        sudo dnf -y remove NetworkManager
+        ;;
+      *)
+        sudo apt-get remove network-manager -y
+        ;;
+    esac
 fi
 
 # Cron Jobs if any
